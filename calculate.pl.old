@@ -1,0 +1,905 @@
+#!/usr/bin/perl
+#
+#
+#
+use CGI qw(:standard);
+
+print header;
+print <<BEGIN;
+
+<head>
+  <title>Brian McGehee IPv6 Address Utility</title>
+  <link rel="stylesheet" href="ipv6util.css" TYPE="text/css"></link>
+  <meta name="Generator" content="Brian McGehee">
+  <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+  <meta name="description" content="Brian McGehee IPv6 Address Utility">
+  <meta name="keywords" content="Brian McGehee IPv6 Address Utility">
+  <meta name="robots" content="index,follow">
+</head>
+
+BEGIN
+
+my $varIPv6Input=param("inipv6address") || "::"; 
+
+print <<FORMSTART;
+<div ID="divOptions">
+<fieldset><legend>Enter IPv6 Address</legend>
+<table cellspacing="0" cellpadding="1" border="0">
+<tr><td align="left" valign="top">
+<form method="post" action="calculate.pl" name="formOptions" id="formOptions" class="formclass1">
+
+FORMSTART
+
+print "<input type=\"text\"  name=\"inipv6address\" value=\"$varIPv6Input\" class=\"fieldspec\">\n";
+
+print <<FORMEND;
+<p></p><input type="submit" name="doCalc" id="doCalc" value="Calculate">
+</form></p>
+</td></tr></table>
+</fieldset>
+</div>
+
+FORMEND
+
+print <<LOGO;
+<div ID="logo">
+<h1>Brian McGehee IPv6 Address Utility</h1>
+<p class="version"><a href="versioninfo.htm">version 1.1</a><br>
+<p><a href="index.htm">How to use this</a></p>
+Feedback, suggestions, bugs...<br><a href="mailto:doc\@tavian.com">email doc\@tavian.com</a><br>
+</div>
+
+LOGO
+
+$starttable1 = "<div ID=\"feedback\">\n<table border=1 class='tableclass1'>";
+$starttable2 = "<table border=1 class='tableclass1'>";
+$startrow1 = "<tr class='trclass1'><td class='tdclass1'>";
+$startrow1a = "<tr class='trclass1'><td class='tdclass2a'>";
+$startrow2 = "<tr class='trclass1'><td class='tdclass1' colspan=2>";
+$startrow3 = "<tr class='trclass3'><td class='tdclass3' colspan=3>";
+$startrow4 = "<tr class='trclass4'><td class='tdclass4' colspan=4>";
+$startrow4a = "<tr class='trclass4'><td class='tdclass4' colspan=135>";
+$startrow4b = "<tr class='trclass4'><td class='tdclass2' colspan=135>";
+$rowdivider1 = "</td><td class='tdclass2' colspan=2>";
+$rowdivider2 = "</td><td class='tdclass2'>";
+$rowdivider2a = "</td><td class='tdclass2a'>";
+$rowdivider4 = "</td><td class='tdclass4' colspan=4>";
+$rowdivider4a = "</td><td class='tdclass4'>";
+$endrow1 = "</td></tr>";
+$closetable1 = "</table>";
+$closetable2 = "</table></div>";
+
+$currentchunk = 0;
+$currentchar = 0;
+$maxchunks = 0;
+$lastchar = "";
+@chunk = "";
+@octet = "";
+@firstoctet = "";
+@details = "";
+$nummasks = 0;
+$currentoctet = 0;
+$doublecolon = -1;
+$isglobal="unknown";
+$interfaceID="unknown";
+
+$subnet = 0;
+$subnetmask = "";
+$network = "";
+
+$ipv6address = "";
+$ipv6address_truncate = "";
+$ipv6address_binary = "";
+$ipv4address_embedded = "";
+
+$hexstring="0123456789ABCDEF";
+$binstring="0000z0001z0010z0011z0100z0101z0110z0111z1000z1001z1010z1011z1100z1101z1110z1111";
+
+print "$starttable1\n";
+print "$startrow1 Original Input$rowdivider1$varIPv6Input$endrow1";
+
+my $ztemp = convertinput($varIPv6Input);
+if (!$ztemp) {alert ('Bad Conversion.');return false;}
+
+$oipv6address=$ipv6address;
+$oipv6address_truncate=$ipv6address_truncate;
+$oipv6address_binary=$ipv6address_binary;
+$ofirstipv4address_embedded=$firstipv4address_embedded;
+$oipv4address_embedded=$ipv4address_embedded;
+$osubnet=$subnet;
+$onetwork=$network;
+
+my $ztemp2="";
+my $flag = index($hexstring,substr($ipv6address_truncate,17,1));
+if ($flag & 2)
+{
+	$isglobal = "global";
+} else 	{
+	$isglobal = "local";
+}
+$interfaceID=substr($ipv6address_truncate,16,16);
+
+print "$startrow1 IPv6 Address$rowdivider1$ipv6address/$subnet$endrow1\n";
+print "$startrow1 Network Prefix$rowdivider1$network$endrow1\n";
+print "$startrow1 InterfaceIdentifier$rowdivider1$interfaceID   G/L bit:$isglobal$endrow1\n";
+
+if ($firstipv4address_embedded!="...")
+{
+	print "$startrow1 Entered IPv4$rowdivider1$firstipv4address_embedded$endrow1\n";
+}
+if ($ipv4address_embedded!="...")
+{
+	print "$startrow1 Entered IPv4$rowdivider1$ipv4address_embedded$endrow1\n";
+}
+print "$startrow1 IPv6 Addr-bin$rowdivider1$ipv6address_binary$endrow1\n";
+print "$startrow1 Subnet Mask$rowdivider1$subnetmask$endrow1\n";
+print "$startrow1 Network Pfx-bin$rowdivider1$network_binary$endrow1\n";
+
+$ztemp = checkmasks();
+print "$closetable1\n";
+$ztemp = maskanalyze();
+print "$closetable2\n";
+
+sub maskanalyze
+{
+	print "<br>$starttable2$startrow4a Network Prefix Analysis /$osubnet$endrow1\n";
+	print "$startrow4";
+	for (my $ztemp=0;$ztemp<40;$ztemp++)
+	{
+		my $ztemp2=substr($oipv6address,$ztemp,1);
+		print "$ztemp2";
+		if ($ztemp<39)
+		{
+			if ((($ztemp+2)/5) == int(($ztemp+2)/5))
+			{
+				print "$rowdivider4a";
+			} else {
+				print "$rowdivider4";
+			}
+		}
+	}
+	print "$endrow1\n";
+	if ($osubnet < 1)
+	{
+		print "$startrow1a";
+	} else {
+		print "$startrow1";
+	}
+	for (my $ztemp=0;$ztemp<128;$ztemp++)
+	{
+		my $ztemp2=substr($oipv6address_binary,$ztemp,1);
+		print "$ztemp2";
+		if (($ztemp+2) > $osubnet)
+		{
+			$ztemp2=$rowdivider2a;
+		} else {
+			$ztemp2=$rowdivider2;
+		}
+		if ($ztemp<127)
+		{
+			if ((($ztemp+1)/16) == int(($ztemp+1)/16))
+			{
+				print "$ztemp2:$ztemp2"; 
+			} else {
+				print "$ztemp2";
+			}
+		}
+	}
+	print "$endrow1\n";
+	print "$startrow4";
+	for (my $ztemp=0;$ztemp<40;$ztemp++)
+	{
+		my $ztemp2=substr($onetwork,$ztemp,1);
+		print "$ztemp2";
+		if ($ztemp<39)
+		{
+			if ((($ztemp+2)/5) == int(($ztemp+2)/5))
+			{
+				print "$rowdivider4a";
+			} else {
+				print "$rowdivider4";
+			}
+		}
+	}
+	print "$startrow4b Prefix Length = $osubnet bits$endrow1\n";
+	my $ztemp1 = 128-$osubnet;
+	my $ztemp = comma(sprintf("%.0f",2 ** $ztemp1));
+	print "$startrow4b Hosts         = 2<sup>$ztemp1</sup>   =  $ztemp$endrow1\n";
+	my $ztemp = 64-$osubnet;
+	if ($ztemp>=0)
+	{
+		my $ztemp1 = comma(sprintf("%.0f",2 ** $ztemp));
+		print "$startrow4b /64 networks = 2<sup>$ztemp</sup>     = $ztemp1$endrow1\n";
+	}
+}
+
+sub comma
+{
+        my $number=shift(@_);
+        my $length=length($number);
+        my $output="";
+        if ($length<3) {return $number;}
+        while ($length>3)
+        {
+                $output=",".substr($number,($length-3),3).$output;
+                $number=substr($number,0,($length-3));
+                $length=length($number);
+        }
+	$output=$number.$output;
+        return $output;
+}
+
+sub getv4
+{
+	my $hex=shift(@_);
+	if (length($hex) != 8) {alert("Can't get IPv4 address from non 8 hex string!");return false;}
+	my $zchar="";
+	my $ztemp=0;
+	my $v4addr="";
+	for (my $ztemp=0;$ztemp<7;$ztemp=$ztemp+2)
+	{
+		$zchar=hexToOctet(substr($hex,$ztemp,2));
+		$v4addr=$v4addr.$zchar;
+		if ($ztemp<6) {$v4addr=$v4addr.".";}
+	}
+	return $v4addr;	
+}
+
+sub hexToOctet(hex)
+{
+	my $hex=shift(@_);
+	if (length($hex) != 2) {alert("Can't get octet from bad hex string!");return false;}
+	my $high = index($hexstring,substr($hex,0,1)) * 16;
+	my $low = index($hexstring,substr($hex,1,1));	
+	my $ztemp3 = $high + $low; 
+	return $ztemp3;
+}
+
+sub zchunk
+{
+	my $address=shift(@_);
+	if (length($address) != 32) {alert("Can't chunk non 32 hex string!");return false;}
+	my $ztemp2="";
+	for (my $ztemp=0;$ztemp<32;$ztemp=$ztemp+4)
+	{
+		$zchar=substr($address,$ztemp,4);
+		if ($ztemp>0)
+		{
+			$zchar=":".$zchar;
+		}
+		$ztemp2=$ztemp2.$zchar;
+	}
+	return $ztemp2;
+}
+
+sub unchunk
+{
+	my $address=shift(@_);
+	if (length($address) != 39) {alert("Can't unchunk non 39 hex string!");return false;}
+	my $ztemp2="";
+	for (my $ztemp=0;$ztemp<39;$ztemp=$ztemp+5)
+	{
+		$ztemp2=$ztemp2+substr($address,$ztemp,4);
+	}
+	return $ztemp2;
+}
+
+sub zand
+{
+	my $and1=shift(@_);
+	my $and2=shift(@_);
+	if ((length($and1) != length($and2)) || (length($and1) != 128)) {alert("Can't AND non 128bit lengths!");return false;}
+	my $ztemp3="";
+	for (my $ztemp=0;$ztemp<length($and1);$ztemp++)
+	{
+		my $ztemp2="";
+		if (substr($and1,$ztemp,1) == substr($and2,$ztemp,1))
+		{
+			$ztemp2=substr($and1,$ztemp,1);
+		} else {
+			$ztemp2="0";
+		}
+		$ztemp3=$ztemp3.$ztemp2;
+	}
+	return $ztemp3;		
+}
+
+sub binToHex
+{
+	my $bin=shift(@_);
+	my $ztemp3 = length($bin);
+	if ((($ztemp3 / 4) != int($ztemp3 / 4)) || ($ztemp3 < 4) || ($ztemp3 > 128))
+	{
+		alert('Wrong bit length for hex conversion!');return false;
+	}
+	$ztemp3="";
+	for (my $ztemp=0; $ztemp < length($bin); $ztemp=$ztemp+4)
+	{
+		my $zchar=substr($bin,$ztemp,4);
+		$ztemp2=(index($binstring,$zchar)) /5;
+		$ztemp3=$ztemp3.substr($hexstring,$ztemp2,1);
+	}
+	return $ztemp3;
+}
+
+sub hexToBin
+{
+	my $hex = shift(@_);
+	my $ztemp3 = "";
+	for ($ztemp=0; $ztemp < length($hex); $ztemp++)
+	{
+		$zchar=substr($hex,$ztemp,1);
+		$ztemp2=index($hexstring,$zchar) *5;
+		$ztemp3=$ztemp3.substr($binstring,$ztemp2,4);
+	}
+	return $ztemp3;
+}
+
+
+sub clearall
+{
+	$currentcunk = 0;
+	$currentchar = 0;
+	$maxchunks = 0;
+	$lastchar = "";
+	$doublecolon = -1;
+	$subnet = 0;
+	$ipv6address = "";
+	$ipv6address_truncate = "";
+	$ipv6address_binary = "";
+	$isglobal="unknown";
+	$interfaceID="unknown";
+	for (my $ztemp=0; $ztemp < 9; $ztemp++)
+	{
+		$chunk[$ztemp]="";
+	}
+	$currentoctet = 0;
+	for (my $ztemp=0; $ztemp < 4; $ztemp++)
+	{
+		$firstoctet[$ztemp]="";
+		$octet[$ztemp]="";
+	}
+}
+
+sub convertinput
+{
+	my $ztemp=clearall();
+	my $convertstring = shift(@_);
+	my $zchar2="";
+
+	for (my $currentchar=0; $currentchar < length($convertstring); $currentchar++) {
+		my $zchar=substr($convertstring,$currentchar,1);
+
+		if ($zchar eq ".")
+		{
+			if ($chunk[$currentchunk] eq ""){alert('Bad ipv4 address embedding!');return false;}
+			if ($currentoctet>0)
+	 		{
+				for ($ztemp=0; $ztemp<4; $ztemp++)
+				{
+					$firstoctet[$ztemp]=$octet[$ztemp];
+				}
+				$currentoctet=0;
+			}
+			$octet[$currentoctet]=$chunk[$currentchunk];
+			$chunk[$currentchunk]="";
+			$currentoctet++;
+			if ($currentchar+1 <= length($convertstring))
+			{
+				for ($ztemp=$currentchar+1;$ztemp<length($convertstring);$ztemp++)
+				{
+					$lastchar=$zchar2;
+					$zchar2=substr($convertstring,$ztemp,1);
+					if ($zchar2 eq ".")
+					{
+						if ($chunk[$currentchunk] eq "") {alert('Bad ipv4 address embedding!');return false;	}
+						$octet[$currentoctet]=$chunk[$currentchunk];
+						$chunk[$currentchunk]="";
+						$currentoctet++;
+					} elsif ($zchar2 eq ":" || $zchar2 eq "/") {
+						if ($currentoctet<3) {alert('Not enough octets in ipv4 address!'); return false; }
+						last;
+					} elsif (!($zchar2 =~ /[0-9]/)) {
+							alert('Invalid char in ipv4 address!');return false;
+						} else {
+							$chunk[$currentchunk]=$chunk[$currentchunk].$zchar2;
+					}
+				}
+				$octet[$currentoctet]=$chunk[$currentchunk];
+				$chunk[$currentchunk]="";
+				$currentoctet++;
+				$zchar=$zchar2;
+				$currentchar=$ztemp;
+				$chunk[$currentchunk]=sprintf("%02X",$octet[0]).sprintf("%02X",$octet[1]);
+				$currentchunk++;
+				if ($currentchunk>7) {alert('More than 8 chunks!');return false;}
+				$chunk[$currentchunk]=sprintf("%02X",$octet[2]).sprintf("%02X",$octet[3]);
+			}
+
+			if ($currentchar >= length($convertstring)) {last;}
+
+		}
+		if ($zchar eq "/")
+		{
+			$ztemp=index($convertstring,"/");
+			$ztemp2=length($convertstring)-$ztemp;
+			if ($ztemp2)
+			{
+				$zchar=substr($convertstring,$ztemp+1,$ztemp2);
+			} else {
+				$zchar="0";
+			}
+			$subnet = int($zchar);
+			$currentchar = length($convertstring)+1;
+			if (($subnet>128) || ($subnet<0))
+			{
+				alert('Bad prefix bits!');return false;
+			}
+
+		} elsif ($zchar eq ":") {
+
+			if ($lastchar eq ":")
+			{
+				if ($doublecolon > -1){alert('More than 1 double colon!');return false;}
+				$doublecolon=$currentchunk;
+			}
+			while (length($chunk[$currentchunk])<4)
+			{
+				$chunk[$currentchunk]="0".$chunk[$currentchunk];
+			}
+			$currentchunk++;
+			if ($currentchunk>7){ alert('More than 8 chunks!');return false;}
+			$chunk[$currentchunk]="";
+
+		} elsif ($zchar =~ /[0-9AaBbCcDdEeFf]/) {
+
+			if (length($chunk[$currentchunk])>3){alert('Too many in chunk!');return false;}
+			$zchar=uc($zchar);
+			$chunk[$currentchunk] = $chunk[$currentchunk].$zchar;
+		}
+		else
+		{
+			alert('Illegal character in address['.$zchar.']!');return false;
+		}
+
+		$lastchar=$zchar;
+	}
+
+	while (length($chunk[$currentchunk])<4)
+	{
+		$chunk[$currentchunk]="0".$chunk[$currentchunk];
+	}
+
+	$maxchunks=$currentchunk;
+	$currentchunk=0;
+
+	if ($maxchunks<7)
+	{
+		if ($doublecolon == -1)
+		{
+			alert('Bad chunk count! Missing doublecolon?');return false;
+		}
+		for (my $currentchunk=$doublecolon; $currentchunk<($doublecolon+(7-$maxchunks)); $currentchunk++)
+		{
+			my $revchunk="";
+			for ($revchunk=7; $revchunk>$currentchunk; $revchunk--)
+			{
+				if ($revchunk>0)
+				{
+					$chunk[$revchunk]=$chunk[$revchunk-1];
+				} 
+			}
+			$chunk[$revchunk]="";
+		}
+	}
+
+	for (my $currentchunk=0; $currentchunk<8; $currentchunk++)
+	{
+		while (length($chunk[$currentchunk])<4)
+		{
+			$chunk[$currentchunk]="0".$chunk[$currentchunk];
+		}
+	}
+	
+	$ipv6address=$chunk[0].":".$chunk[1].":".$chunk[2].":".$chunk[3].":".$chunk[4].":".$chunk[5].":".$chunk[6].":".$chunk[7];
+	$ipv6address_truncate=$chunk[0].$chunk[1].$chunk[2].$chunk[3].$chunk[4].$chunk[5].$chunk[6].$chunk[7];
+	$ipv4address_embedded=$octet[0].".".$octet[1].".".$octet[2].".".$octet[3];
+	$firstipv4address_embedded=$firstoctet[0].".".$firstoctet[1].".".$firstoctet[2].".".$firstoctet[3];
+	$ipv6address_binary=hexToBin($ipv6address_truncate);
+	$subnetmask="";
+	for (my $ztemp=0;$ztemp<$subnet;$ztemp++)
+	{
+		$subnetmask=$subnetmask."1";
+	}
+	while (length($subnetmask)<128)
+	{
+		$subnetmask=$subnetmask."0";
+	}
+	$network_binary=zand($ipv6address_binary,$subnetmask);
+	$ztemp=binToHex($network_binary);
+	$network=zchunk($ztemp);
+	return true;
+}
+
+sub checkmasks
+{
+	my $ztemp=setdetails();
+	print "$startrow3 Mask Mapping to reserved Addresses$endrow1\n";
+	for (my $ztemp=0;1;$ztemp++)
+	{
+		my $details_ip=$details[$ztemp][0];
+		my $details_mask=$details[$ztemp][1];
+		my $details_name=$details[$ztemp][2];
+		my $details_possible=$details[$ztemp][3];
+		my $details_flag=$details[$ztemp][4];
+		
+		if ($details_ip eq "") {last;}
+		$zchar=convertinput($details_ip);
+		if (!$zchar) {alert ('Bad details_ip Conversion.');return false;}
+		my $zprefix=$ipv6address;
+		my $zprefix_bin=$ipv6address_binary;
+		my $znetmask=$subnetmask;
+		my $zsubnet=$subnet;
+		if ($details_mask ne "")
+		{
+			$zchar=convertinput($details_mask);
+			if (!$zchar) {alert ('Bad details_mask Conversion.');return false;}
+			$znetmask=$ipv6address_binary;
+			$zsubnet="non-contiguous";
+		}
+		my $ztemp2=zand($znetmask,$oipv6address_binary);
+		if ($ztemp2 eq $zprefix_bin)
+		{
+			if ($details_possible>50)
+			{
+				$zchar="Yes";
+			} elsif ($details_possible>49) {
+				$zchar="Probable";
+			} else {
+				$zchar="Possible";
+			}
+		} else {
+			$zchar="No";
+		}
+		if ($zchar ne "No")
+		{
+			print "$startrow1$details_ip$rowdivider2$zchar$rowdivider2$details_name$endrow1\n";
+			if ($details_flag eq "6to4") {
+				#6to4;
+				my $v4addr=getv4(substr($oipv6address_truncate,4,8));
+				my $istrue = isprivate($v4addr);
+				my $islegal="";
+				if ($istrue eq true) { $islegal="illegal"; } else { $islegal="legal"; }
+				if (substr($v4addr,0,9) eq "192.88.99")
+				{
+					print "$startrow2...6to4 Relay v4$rowdivider2$v4addr$endrow1\n";
+				} else {
+					print "$startrow2...6to4 Router v4$rowdivider2$v4addr - $islegal for 6to4 site. $endrow1\n";
+				}
+			} elsif ($details_flag eq "ISATAP") {
+				#ISATAP;
+				my $v4addr=getv4(substr($oipv6address_truncate,24,8));
+				my $istrue = isprivate($v4addr);
+				my $ispriv="";
+				if ($istrue) { $ispriv="Private"; } else { $ispriv="Public";}
+				print "$startrow2...ISATAP host v4$rowdivider2$v4addr - $ispriv ipv4 address. $endrow1\n";
+			} elsif ($details_flag eq "EUI64") {
+				#EUI-64;
+				#var interfaceID=oipv6address_truncate.substr(16,16);
+				my $MAC48=substr($oipv6address_truncate,17,6).substr($oipv6address_truncate,26,6);
+				my $flag=index($hexstring,substr($oipv6address_truncate,17,1));
+				my $flag2=substr($hexstring,($flag ^ 2),1);
+				$MAC48 = substr($oipv6address_truncate,16,1) . $flag2 .":". substr($oipv6address_truncate,18,2) .":". substr($oipv6address_truncate,20,2) .":". substr($oipv6address_truncate,26,2) .":". substr($oipv6address_truncate,28,2) .":". substr($oipv6address_truncate,30,2);
+				print "$startrow1...MAC 48$rowdivider2 Possible$rowdivider2$MAC48$endrow1\n";
+			} elsif ($details_flag eq "SNM") {
+				#Solicited Node Multicast;
+				$bit24=substr($oipv6address_truncate,26,6);
+				print "$startrow1...24bits$rowdivider1$bit24$endrow1\n";
+			} elsif ($details_flag eq "v4compat") {
+				#v4 compatible address;
+				my $v4addr=getv4(substr($oipv6address_truncate,24,8));
+				my $istrue = isprivate($v4addr);
+				my $ispriv="";
+				if ($istrue) { $ispriv="Private"; } else { $ispriv="Public";}
+				if ($v4addr eq "0.0.0.0")
+				{
+					print "$startrow2...v4 compatible v4$rowdivider2$v4addr - NOT v4-compatible. $endrow1\n";
+				} else {
+					print "$startrow2...v4 compatible v4$rowdivider2$v4addr - $ispriv ipv4 address. $endrow1\n";
+				}
+			} elsif ($details_flag eq "v4map") {
+				#v4 mapped address;
+				my $v4addr=getv4(substr($oipv6address_truncate,24,8));
+				my $istrue = isprivate($v4addr);
+				my $ispriv="";
+				if ($istrue) { $ispriv="Private"; } else { $ispriv="Public";}
+				print "$startrow2...v4 mapped v4$rowdivider2$v4addr - $ispriv ipv4 address. $endrow1\n";
+			} elsif ($details_flag eq "anyscope") {
+				#anyscope multicast address;
+				print "$startrow1$rowdivider1...Above is anyscope multicast ff0X::\n";
+			}
+		}
+	}
+}
+
+sub isprivate
+{
+	my $v4addr = shift (@_);
+	if ((substr($v4addr,0,2) eq "10") || (substr($v4addr,0,7) eq "192.168") || (substr($v4addr,0,6) eq "172.16") || ($v4addr eq "0.0.0.0") || (substr($v4addr,0,7) eq "127.0.0") || (substr($v4addr,0,15) eq "255.255.255.255"))
+	{
+		return true;
+	} else {
+		return false;
+	}
+}
+
+sub alert
+{
+	my $errmsg = shift(@_);
+	print "\nERROR! $errmsg\n";
+	print end_html;
+	exit;
+}
+
+sub setdetails
+{
+	@details = (
+		["::/8","","Unassigned*<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",49,""],
+		["100::/8","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["200::/7","","Reserved for NSAP<a href='http://www.ietf.org/rfc/rfc1888.txt?number1888'>[RFC1888]</a>",100,""],
+		["400::/6","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["800::/5","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["1000::/4","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["2000::/3","","Globally routable address space<a href='http://www.ietf.org/rfc/rfc2374.txt?number2374'>[RFC2374]</a>",100,""],
+		["4000::/3","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["6000::/3","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["8000::/3","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["a000::/3","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["c000::/3","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["e000::/4","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["f000::/5","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["f800::/6","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["fc00::/7","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["fe00::/9","","Unassigned<a href='http://www.ietf.org/rfc/rfc3513.txt?number3513'>[RFC3513]</a>",100,""],
+		["fe80::/10","","Link Local Address<a href='http://www.ietf.org/rfc/rfc2460.txt?number2460'>[RFC2460]</a>",100,""],
+		["fec0::/10","","Site Local Address<a href='http://www.ietf.org/rfc/rfc3879.txt?number3879'>[RFC3879]</a>",100,""],
+		["ff00::/8","","Multicast address <a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,""],
+		
+		["::/128","","Unspecified",100,""],
+		["::1/128","","Loopback Address",100,""],
+		
+		["2000::/16","","Reserved TLA",100,""],
+		["2001::/16","","Sub-TLA Assignements <a href='http://www.ietf.org/rfc/rfc2450.txt?number2450'>[RFC2450]",100,""],
+		["2002::/16","","6to4 Transition Site <a href='http://www.ietf.org/rfc/rfc3056.txt?number3056'>[RFC3056]",100,"6to4"],
+		["3ffe::/16","","6bone Prefix (deprecated 06/06/2006)",100,""],
+
+		["ff01::/16","","Multicast address Interface-local scope <a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,""],
+		["ff02::/16","","Multicast address Link-local scope <a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,""],
+		["ff05::/16","","Multicast address Site-local scope <a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,""],
+		["ff08::/16","","Multicast address Organization-local scope <a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,""],
+		["ff0e::/16","","Multicast address Global scope <a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,""],
+
+		["ff01::1/128","","All Nodes <a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,""],
+		["ff01::2/128","","All Routers<a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,""],
+		
+		["ff02::1/128","","All Nodes<a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,""],
+		["ff02::2/128","","All Routers<a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,""],
+		["ff02::3/128","","Unassigned",100,""],
+		["ff02::4/128","","DVMRP Routers<a href='http://www.ietf.org/rfc/rfc1075.txt?number1075'>[RFC1075]",100,""],
+		["ff02::5/128","","OSPFIGP<a href='http://www.ietf.org/rfc/rfc2328.txt?number2328'>[RFC2328]",100,""],
+		["ff02::6/128","","OSPFIGP Designated Routers<a href='http://www.ietf.org/rfc/rfc2328.txt?number2328'>[RFC2328]",100,""],
+		["ff02::7/128","","ST Routers<a href='http://www.ietf.org/rfc/rfc1190.txt?number1190'>[RFC1190]</a>",100,""],
+		["ff02::8/128","","ST Hosts<a href='http://www.ietf.org/rfc/rfc1190.txt?number1190'>[RFC1190]</a>",100,""],
+		["ff02::9/128","","RIP Routers<a href='http://www.ietf.org/rfc/rfc2080.txt?number2080'>[RFC2080]</a>",100,""],
+		["ff02::A/128","","EIGRP Routers",100,""],
+		["ff02::B/128","","Mobile-Agents",100,""],
+#		["ff02::C/128","","SSDP",100,""],
+		["ff02::D/128","","All PIM Routers",100,""],
+		["ff02::E/128","","RSVP-ENCAPSULATION",100,""],
+		["ff02::16/128","","All MLDv2-capable routers<a href='http://www.ietf.org/rfc/rfc3810.txt?number3810'>[RFC3810]</a>",100,""],
+		["ff02::1:1/128","","Link Name",100,""],
+		["ff02::1:2/128","","All-dhcp-agents<a href='http://www.ietf.org/rfc/rfc3315.txt?number3315'>[RFC3315]</a>",100,""],
+		["ff02::1:3/128","","Link-Local Multicast Name Resolution",100,""],
+		["ff02::1:4/128","","DTCP Announcement",100,""],
+		["ff02::1:ff00:0/104","","Solicited Node multicast<a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,"SNM"],
+		
+		["ff05::2/128","","All Routers<a href='http://www.ietf.org/rfc/rfc2373.txt?number2373'>[RFC2373]</a>",100,""],
+		["ff05::1:3/128","","All-dhcp-servers<a href='http://www.ietf.org/rfc/rfc3315.txt?number3315'>[RFC3315]</a>",100,""],
+		["ff05::1:4/128","","Deprecated (2003-03-12)",100,""],
+
+		["ff00::1:1000","ffff:ffff:ffff:ffff:ffff:ffff:ffff:fc00","Service Location, Version 2<a href='http://www.ietf.org/rfc/rfc3111.txt?number3111'>[RFC3111]</a>",50,"anyscope"],
+		["ff00::100","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","VMTP Managers Group<a href='http://www.ietf.org/rfc/rfc1045.txt?number1045'>[RFC1045]</a>",100,"anyscope"],
+		["ff00::c","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","SSDP",100,"anyscope"],
+		["ff00::101","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","Network Time Protocol<a href='http://www.ietf.org/rfc/rfc1119.txt?number1119'>[RFC1119]</a>",100,"anyscope"],
+		["ff00::102","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","SGI-Dogfight",100,"anyscope"],
+		["ff00::103","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","Rwhod",100,"anyscope"],
+		["ff00::104","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","VNP",100,"anyscope"],
+		["ff00::105","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","Artificial Horizons - Aviator",100,"anyscope"],
+		["ff00::106","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","NSS - Name Service Server",100,"anyscope"],
+		["ff00::107","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","UDIONEWS - Audio News Multicast",100,"anyscope"],
+		["ff00::108","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","SUN NIS+ Information Service",100,"anyscope"],
+		["ff00::109","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","MTP Multicast Transport Protocol",100,"anyscope"],
+		["ff00::10a","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","IETF-1-LOW-AUDIO",100,"anyscope"],
+		["ff00::10b","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","IETF-1-AUDIO",100,"anyscope"],
+		["ff00::10c","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","IETF-1-VIDEO",100,"anyscope"],
+		["ff00::10d","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","IETF-2-LOW-AUDIO",100,"anyscope"],
+		["ff00::10e","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","IETF-2-AUDIO",100,"anyscope"],
+		["ff00::10f","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","IETF-2-VIDEO",100,"anyscope"],
+		["ff00::110","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","MUSIC-SERVICE",100,"anyscope"],
+		["ff00::111","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","SEANET-TELEMETRY",100,"anyscope"],
+		["ff00::112","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","SEANET-IMAGE",100,"anyscope"],
+		["ff00::113","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","MLOADD",100,"anyscope"],
+		["ff00::114","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","any private experiment",100,"anyscope"],
+		["ff00::115","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","DVMRP on MOSPF",100,"anyscope"],
+		["ff00::116","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","SVRLOC",100,"anyscope"],
+		["ff00::117","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","XINGTV",100,"anyscope"],
+		["ff00::118","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","microsoft-ds",100,"anyscope"],
+		["ff00::119","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","nbc-pro",100,"anyscope"],
+		["ff00::11a","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","nbc-pfn",100,"anyscope"],
+		["ff00::11b","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","lmsc-calren-1",100,"anyscope"],
+		["ff00::11c","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","lmsc-calren-2",100,"anyscope"],
+		["ff00::11d","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","lmsc-calren-3",100,"anyscope"],
+		["ff00::11e","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","lmsc-calren-4",100,"anyscope"],
+		["ff00::11f","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","ampr-info",100,"anyscope"],
+
+		["ff00::120","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","mtrace",100,"anyscope"],
+		["ff00::121","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","RSVP-encap-1",100,"anyscope"],
+		["ff00::122","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","RSVP-encap-2",100,"anyscope"],
+		["ff00::123","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","SVRLOC-DA",100,"anyscope"],
+		["ff00::124","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","rln-server",100,"anyscope"],
+		["ff00::125","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","proshare-mc",100,"anyscope"],
+		["ff00::126","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","dantz",100,"anyscope"],
+		["ff00::127","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","cisco-rp-announce",100,"anyscope"],
+		["ff00::128","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","cisco-rp-discovery",100,"anyscope"],
+		["ff00::129","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","gatekeeper",100,"anyscope"],
+		["ff00::12a","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","iberiagames",100,"anyscope"],
+		["ff00::12b","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","X Display",100,"anyscope"],
+
+		["ff00::201","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","rwho Group (BSD) unofficial",100,"anyscope"],
+		["ff00::202","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","SUN RPC PMAPPROC_CALLIT",100,"anyscope"],
+
+		["ff00::300","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","Mbus/IPv6<a href='http://www.ietf.org/rfc/rfc3259.txt?number3259'>[RFC3259]</a>",100,"anyscope"],
+
+		["ff00::2:7ffe","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","SAPv1 Announcements",100,"anyscope"],
+		["ff00::2:7fff","fff0:ffff:ffff:ffff:ffff:ffff:ffff:ffff","SAPv0 Announcements (deprecated)",100,"anyscope"],
+		
+		["ff00::2:7000","ffff:ffff:ffff:ffff:ffff:ffff:ffff:8000","Multimedia Conference Calls",50,"anyscope"],
+		["ff00::2:8000","ffff:ffff:ffff:ffff:ffff:ffff:ffff:8000","SAP Dynamic Assignments",50,"anyscope"],
+
+		["2001:0000::/23","","IANA",100,""],
+		["2001:0200::/23","","APNIC",100,""],
+		["2001:0400::/23","","ARIN",100,""],
+		["2001:0600::/23","","RIPE NCC",100,""],
+		["2001:0800::/23","","RIPE NCC",100,""],
+		["2001:0A00::/23","","RIPE NCC",100,""],
+		["2001:0C00::/23","","APNIC",100,""],
+		["2001:0E00::/23","","APNIC",100,""],
+		["2001:1000::/23","","future",100,""],
+		["2001:1200::/23","","LACNIC",100,""],
+		["2001:1400::/23","","RIPE NCC",100,""],
+		["2001:1600::/23","","RIPE NCC",100,""],
+		["2001:1800::/23","","ARIN",100,""],
+		["2001:1A00::/23","","RIPE NCC",100,""],
+		["2001:1C00::/23","","RIPE NCC",100,""],
+		["2001:1E00::/23","","RIPE NCC",100,""],
+		["2001:2000::/23","","RIPE NCC",100,""],
+		["2001:2200::/23","","RIPE NCC",100,""],
+		["2001:2400::/23","","RIPE NCC",100,""],
+		["2001:2600::/23","","RIPE NCC",100,""],
+		["2001:2800::/23","","RIPE NCC",100,""],
+		["2001:2A00::/23","","RIPE NCC",100,""],
+		["2001:2C00::/23","","RIPE NCC",100,""],
+		["2001:2E00::/23","","RIPE NCC",100,""],
+		["2001:3000::/23","","RIPE NCC",100,""],
+		["2001:3200::/23","","RIPE NCC",100,""],
+		["2001:3400::/23","","RIPE NCC",100,""],
+		["2001:3600::/23","","RIPE NCC",100,""],
+		["2001:3800::/23","","RIPE NCC",100,""],
+		["2001:3A00::/23","","RIPE NCC",100,""],
+		["2001:3C00::/23","","reserved",100,""],
+		["2001:3E00::/23","","reserved",100,""],
+		["2001:4000::/23","","RIPE NCC",100,""],
+		["2001:4200::/23","","ARIN",100,""],
+		["2001:4400::/23","","APNIC",100,""],
+		["2001:4600::/23","","RIPE NCC",100,""],
+		["2001:4800::/23","","ARIN",100,""],
+		["2001:4A00::/23","","RIPE NCC",100,""],
+		["2001:4C00::/23","","RIPE NCC",100,""],
+		["2001:4E00::/23","","?Brian?",100,""],
+		["2001:5000::/23","","RIPE NCC",100,""],
+		["2001:5200::/23","","RIPE NCC",100,""],
+		["2001:5400::/23","","RIPE NCC",100,""],
+		["2001:5600::/23","","RIPE NCC",100,""],
+		["2001:5800::/23","","RIPE NCC",100,""],
+		["2001:5A00::/23","","RIPE NCC",100,""],
+		["2001:5C00::/23","","RIPE NCC",100,""],
+		["2001:5E00::/23","","RIPE NCC",100,""],
+		["2001:6000::/23","","?Brian?",100,""],
+		["2001:6200::/23","","?Brian?",100,""],
+		["2001:6400::/23","","?Brian?",100,""],
+		["2001:6600::/23","","?Brian?",100,""],
+		["2001:6800::/23","","?Brian?",100,""],
+		["2001:6A00::/23","","?Brian?",100,""],
+		["2001:6C00::/23","","?Brian?",100,""],
+		["2001:6E00::/23","","?Brian?",100,""],
+		["2001:7000::/23","","?Brian?",100,""],
+		["2001:7200::/23","","?Brian?",100,""],
+		["2001:7400::/23","","?Brian?",100,""],
+		["2001:7600::/23","","?Brian?",100,""],
+		["2001:7800::/23","","?Brian?",100,""],
+		["2001:7A00::/23","","?Brian?",100,""],
+		["2001:7C00::/23","","?Brian?",100,""],
+		["2001:7E00::/23","","?Brian?",100,""],
+		["2001:8000::/23","","APNIC",100,""],
+		["2001:8200::/23","","APNIC",100,""],
+		["2001:8400::/23","","APNIC",100,""],
+		["2001:8600::/23","","APNIC",100,""],
+		["2001:8800::/23","","APNIC",100,""],
+		["2001:8A00::/23","","APNIC",100,""],
+		["2001:8C00::/23","","APNIC",100,""],
+		["2001:8E00::/23","","APNIC",100,""],
+		["2001:9000::/23","","APNIC",100,""],
+		["2001:9200::/23","","APNIC",100,""],
+		["2001:9400::/23","","APNIC",100,""],
+		["2001:9600::/23","","APNIC",100,""],
+		["2001:9800::/23","","APNIC",100,""],
+		["2001:9A00::/23","","APNIC",100,""],
+		["2001:9C00::/23","","APNIC",100,""],
+		["2001:9E00::/23","","APNIC",100,""],
+		["2001:A000::/23","","APNIC",100,""],
+		["2001:A200::/23","","APNIC",100,""],
+		["2001:A400::/23","","APNIC",100,""],
+		["2001:A600::/23","","APNIC",100,""],
+		["2001:A800::/23","","APNIC",100,""],
+		["2001:AA00::/23","","APNIC",100,""],
+		["2001:AC00::/23","","APNIC",100,""],
+		["2001:AE00::/23","","APNIC",100,""],
+		["2001:B000::/23","","future",100,""],
+		["2001:B200::/23","","future",100,""],
+		["2001:B400::/23","","future",100,""],
+		["2001:B600::/23","","future",100,""],
+		["2001:B800::/23","","future",100,""],
+		["2001:BA00::/23","","future",100,""],
+		["2001:BC00::/23","","future",100,""],
+		["2001:BE00::/23","","future",100,""],
+		["2001:C000::/23","","future",100,""],
+		["2001:C200::/23","","future",100,""],
+		["2001:C400::/23","","future",100,""],
+		["2001:C600::/23","","future",100,""],
+		["2001:C800::/23","","future",100,""],
+		["2001:CA00::/23","","future",100,""],
+		["2001:CC00::/23","","future",100,""],
+		["2001:CE00::/23","","future",100,""],
+		["2001:D000::/23","","future",100,""],
+		["2001:D200::/23","","future",100,""],
+		["2001:D400::/23","","future",100,""],
+		["2001:D600::/23","","future",100,""],
+		["2001:D800::/23","","future",100,""],
+		["2001:DA00::/23","","future",100,""],
+		["2001:DC00::/23","","future",100,""],
+		["2001:DE00::/23","","future",100,""],
+		["2001:E000::/23","","future",100,""],
+		["2001:E200::/23","","future",100,""],
+		["2001:E400::/23","","future",100,""],
+		["2001:E600::/23","","future",100,""],
+		["2001:E800::/23","","future",100,""],
+		["2001:EA00::/23","","future",100,""],
+		["2001:EC00::/23","","future",100,""],
+		["2001:EE00::/23","","future",100,""],
+		["2001:F000::/23","","future",100,""],
+		["2001:F200::/23","","future",100,""],
+		["2001:F400::/23","","future",100,""],
+		["2001:F600::/23","","future",100,""],
+		["2001:F800::/23","","future",100,""],
+		["2001:FA00::/23","","future",100,""],
+		["2001:FC00::/23","","future",100,""],
+		["2001:FE00::/23","","future",100,""],
+
+		["::5efe:0:0","::ffff:0:0","ISATAP Interface Identifier",49,"ISATAP"],
+		["::FF:FE00:0","::FF:FF00:0","IEEE 802 MAC >to> EUI-64 Interface Identifier",49,"EUI64"],
+		["::/96","","v4 Compatible Address",49,"v4compat"],
+		["::ffff:0:0/96","","v4 Mapped Address",49,"v4map"],
+	);
+}
+
+print end_html;

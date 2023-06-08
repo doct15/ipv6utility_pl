@@ -1,0 +1,51 @@
+<head>
+  <title>Brian McGehee IPv6 Address Utility</title>
+  <link rel="stylesheet" href="/ipv6util/ipv6util.css" TYPE="text/css"></link>
+  <meta name="Generator" content="Brian McGehee">
+  <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+  <meta name="description" content="Brian McGehee IPv6 Address Utility">
+  <meta name="keywords" content="Brian McGehee IPv6 Address Utility">
+  <meta name="robots" content="index,follow">
+</head>
+
+<div ID="divOptions">
+<fieldset><legend>Enter IPv6 Address</legend>
+<table cellspacing="0" cellpadding="1" border="0">
+<tr><td align="left" valign="top">
+<form method="post" action="/cgi-bin/calculate.pl" name="formOptions" id="formOptions" class="formclass1">
+
+<input type="text"  name="inipv6address" value="::" class="fieldspec">
+
+<p></p><input type="submit" namedoCalc id="doCalc" value="Calculate">
+</form></p>
+</td></tr></table>
+</fieldset>
+</div>
+
+<div ID="logo">
+<h1>Brian McGehee IPv6 Address Utility</h1>
+<p class="version"><a href="versioninfo.htm" TARGET="_blank">version 1.1</a><br></p>
+Feedback, suggestions, bugs...<br><a href="mailto:doc@tavian.com">email doc@tavian.com</a><br>
+</div>
+
+<div ID="info">
+<b>Enter an IPv6 address in the "yellow" field above and click the "Calculate" button.</b><br>
+The address will be classified and referenced to RFC.<br>
+Script matches against over 250 reserved prefixes and masks.<br>
+Prefix (subnetmask) is calculated and how many /64 subnets.<br><br>
+<u>Address formats</u><br>
+<p>xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx/nn<br>
+  8 chunks of 4 hex / prefix bits (0-128)<br><br>
+xxxx:x::xx<br>
+  truncated formats OK<br><br>
+xxxx:oo.oo.oo.oo::x<br>
+  embeded IPv4 addresses OK<br></p>
+<u>Example Addresses</u>
+<p>::1<br>fe80::02d0:c1ff:fe5c:0010/10<br>3ffe:80f0:1:1001::1/64<br>2002:192.88.99.1::1/64<br>2001::1<br>2002:c0a8:1122::5efe:0a01:0101/48<br>ff02::9<br>ff02::1:ff11:2233</p>
+<u>Notes/Todo</u>
+<p><li>You can enter 2 embedded IPv4 addresses (4 octet format)</li>
+<li>ff0x:: anyscope multicast addresses are listed as ff00::</li>
+<li>::/96 v4compat detected even though v4 is 0.0.0.0</li>
+<li></li></p>
+</div>
+</body></html>
